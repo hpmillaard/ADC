@@ -111,7 +111,6 @@ function Add-VPXInstance(){
 
 	$body=@{"ns"=$ns}
 	$json = ConvertTo-Json $Body -Depth 100
-	$json
 	$R = Invoke-RestMethod -uri "$hostname/nitro/v2/config/ns?action=add" -body $json -Method POST -WebSession $NSSession -ContentType "application/json" @params
 }
 
