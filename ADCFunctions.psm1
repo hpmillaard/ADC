@@ -1,4 +1,4 @@
-﻿# Ignore Cert Errors and set TLS1.2
+# Ignore Cert Errors and set TLS1.2
 [System.Net.ServicePointManager]::CheckCertificateRevocationList = { $false }
 [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -57,7 +57,7 @@ function Add-VPXInstance(){
 		[Parameter()][int]$ACU,
 		[Parameter()][int]$SCU,
 		[Parameter(Mandatory=$true)][int]$Memory,
-		[Parameter(Mandatory=$true)][ValidateRange(1,8)][int]$CPU,
+		[Parameter(Mandatory=$true)][ValidateRange(0,8)][int]$CPU,
 		[Parameter()][switch]$L2=$false,
 		[Parameter()][switch]$ManagementLA=$true,
 		[Parameter()][ValidateRange(0,4096)][int]$ManagementVLAGTag,
@@ -78,7 +78,7 @@ function Add-VPXInstance(){
 	If (![System.Net.IPAddress]::TryParse($SubnetMask,[ref]$SubnetMaskObj) -or $SubnetMaskObj.AddressFamily -ne [System.Net.Sockets.AddressFamily]::InterNetwork) {throw "'$SubnetMask' is an invalid IPv4 subnet mask"}
 	If (![System.Net.IPAddress]::TryParse($Gateway,[ref]$IPAddressObj) -or $IPAddressObj.AddressFamily -ne [System.Net.Sockets.AddressFamily]::InterNetwork) {throw "'$Gateway' is an invalid IPv4 address"}
 
-	$ns=@{"name"=$Name;"ip_address"=$IP;"netmask"=$Subnetmask;"gateway"=$Gateway;"profile_name"=$AdminProfile;"license"=$License;"throughput"=$Throughput;"vm_memory_total"=$Memory;"number_of_cpu"=$CPU}
+	$ns=@{"name"=$Name;"ip_address"=$IP;"netmask"=$Subnetmask;"gateway"=$Gateway;"profile_name"=$AdminProfile;"license"=$License;"throughput"=$Throughput;"vm_memory_total"=$Memory;"number_of_cores"=$CPU}
 
 	$R = Invoke-RestMethod -uri "$hostname/nitro/v2/config/xen_nsvpx_image" -Method GET -WebSession $NSSession -ContentType "application/json" @params
 	$Images = $R.xen_nsvpx_image.file_name | Sort-Object -descending
