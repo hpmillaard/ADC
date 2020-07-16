@@ -1,4 +1,4 @@
-# Ignore Cert Errors and set TLS1.2
+﻿# Ignore Cert Errors and set TLS1.2
 [System.Net.ServicePointManager]::CheckCertificateRevocationList = { $false }
 [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -36,6 +36,12 @@ function Get-VPXInstance($Name){
 	$R = Invoke-RestMethod -uri "$hostname/nitro/v2/config/ns?filter=name:$Name" -Method GET -WebSession $NSSession -ContentType "application/json" @params
 	$R.ns | fl
 	$R.ns.network_interfaces | fl
+}
+
+function Get-VPXInstanceState($Name){
+	CheckLogin
+	$R = Invoke-RestMethod -uri "$hostname/nitro/v2/config/ns?filter=name:$Name" -Method GET -WebSession $NSSession -ContentType "application/json" @params
+	$R.ns.instance_state
 }
 
 function Remove-VPXInstance($Name){
@@ -112,6 +118,9 @@ function Add-VPXInstance(){
 	$body=@{"ns"=$ns}
 	$json = ConvertTo-Json $Body -Depth 100
 	$R = Invoke-RestMethod -uri "$hostname/nitro/v2/config/ns?action=add" -body $json -Method POST -WebSession $NSSession -ContentType "application/json" @params
+	Write-Host "VPX $Name is created, waiting for VPX to become ready" -foregroundcolor yellow
+	While ((Get-VPXInstanceState $Name) -ne "Up"){Start-Sleep 3;Write-Host . -NoNewline -foregroundcolor yellow}
+	Write-Host "VPX $Name is up and running" -foregroundcolor green
 }
 
 Function CheckLogin{If ($hostname -eq $NULL){Write-Host "Not logged in. Please login first" -foregroundcolor red;break}}
