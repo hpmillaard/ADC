@@ -1,12 +1,18 @@
-﻿# Ignore Cert Errors and set TLS1.2
+﻿# ADCFunctions.psm1
+# Start with "Import-Module .\ADCFunctions.ps1" to use the functions in this module
+# Version 0.1
+# ADC SDX Nitro Functions
+
+# Ignore Cert Errors and set TLS1.2
 [System.Net.ServicePointManager]::CheckCertificateRevocationList = { $false }
 [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
+# Set Extra Parameters in Powershell 6 and above
 If ((get-host).version.Major -gt 5) {$params=@{SkipCertificateCheck = $true}} else {$params=@{}}
 
+# Login to NetScaler and save session to global variable
 function Login {
-	# Login to NetScaler and save session to global variable
 	[CmdLetBinding()]
 	Param(	[Parameter(Mandatory=$true,ParameterSetName='Address')][string]$IP,
 		[Parameter(Mandatory=$true)][string]$username,
@@ -25,12 +31,14 @@ function Logout {
 	$R = Invoke-RestMethod -uri "$hostname/nitro/v2/config/logout" -body $body -Method POST -WebSession $NSSession -ContentType "application/json" @params
 }
 
+# Get all VPX Instances that live on an SDX
 function Get-VPXInstanceIDs{
 	CheckLogin
 	$R = Invoke-RestMethod -uri "$hostname/nitro/v2/config/ns" -Method GET -WebSession $NSSession -ContentType "application/json" @params
 	$R.ns | select name, id | ft
 }
 
+# Get VPX Instance by name
 function Get-VPXInstance($Name){
 	CheckLogin
 	$R = Invoke-RestMethod -uri "$hostname/nitro/v2/config/ns?filter=name:$Name" -Method GET -WebSession $NSSession -ContentType "application/json" @params
@@ -38,12 +46,14 @@ function Get-VPXInstance($Name){
 	$R.ns.network_interfaces | fl
 }
 
+# Get VPX Instance state by name
 function Get-VPXInstanceState($Name){
 	CheckLogin
 	$R = Invoke-RestMethod -uri "$hostname/nitro/v2/config/ns?filter=name:$Name" -Method GET -WebSession $NSSession -ContentType "application/json" @params
 	$R.ns.instance_state
 }
 
+# Remove VPX Instance by name
 function Remove-VPXInstance($Name){
 	CheckLogin
 	$R = Invoke-RestMethod -uri "$hostname/nitro/v2/config/ns?filter=name:$Name" -Method GET -WebSession $NSSession -ContentType "application/json" @params
@@ -51,14 +61,24 @@ function Remove-VPXInstance($Name){
 	$R = Invoke-RestMethod -uri "$hostname/nitro/v2/config/ns/$ID" -Method DELETE -WebSession $NSSession -ContentType "application/json" @params
 }
 
-function Add-VPXInstance(){
+# Get VPX XEN Images that are available on the SDX
+function Get-VPXImage {
+	CheckLogin
+	$R = Invoke-RestMethod -uri "$hostname/nitro/v2/config/xen_nsvpx_image" -Method GET -WebSession $NSSession -ContentType "application/json" @params
+	$Images = $R.xen_nsvpx_image.file_name | Sort-Object -descending
+	If ($Images.Count -eq 0) {Write-host "No VPX images found on SDX, please install XEN Bundle on SDX and try again" -ForegroundColor Red; Break}
+	If ($Images.Count -eq 1) {$Script:Image = $Local:Images} else {$Script:Image = $Local:Images[0]}
+}
+
+# Create a VPX Instance
+function Add-VPXInstance {
 	[CmdLetBinding()]
 	param(	[Parameter(Mandatory=$true)][string]$Name,
 		[Parameter(Mandatory=$true,ParameterSetName='Address')][string]$IP,
 		[Parameter(Mandatory=$true,ParameterSetName='Address')][string]$Subnetmask,
 		[Parameter(Mandatory=$true,ParameterSetName='Address')][string]$Gateway,
 		[Parameter(Mandatory=$true)][string]$AdminProfile,
-		[Parameter(Mandatory=$true)][ValidateSet('standard','enterprise', 'platinum')][string]$License="platinum",
+		[Parameter(Mandatory=$true)][ValidateSet('standard','advanced','platinum')][string]$License,
 		[Parameter(Mandatory=$true)][int]$Throughput,
 		[Parameter()][int]$ACU,
 		[Parameter()][int]$SCU,
@@ -86,12 +106,9 @@ function Add-VPXInstance(){
 
 	$ns=@{"name"=$Name;"ip_address"=$IP;"netmask"=$Subnetmask;"gateway"=$Gateway;"profile_name"=$AdminProfile;"license"=$License;"throughput"=$Throughput;"vm_memory_total"=$Memory;"number_of_cores"=$CPU}
 
-	$R = Invoke-RestMethod -uri "$hostname/nitro/v2/config/xen_nsvpx_image" -Method GET -WebSession $NSSession -ContentType "application/json" @params
-	$Images = $R.xen_nsvpx_image.file_name | Sort-Object -descending
-	If (!($Images[0])) {Write-host "No VPX images found on SDX, please install XEN Bundle on SDX and try again" -ForegroundColor Red; Break} else {
-		Write-host "VPX will be provisioned with:" $Images[0] -foregroundcolor green
-		$ns.Add("image_name",$Images[0])
-	}
+	Get-VPXImage
+	Write-host "VPX will be provisioned with:" $Image -foregroundcolor green
+	$ns.Add("image_name",$Image)
 
 	If ($L2) {$ns.Add("l2_enabled","true")} else {$ns.Add("l2_enabled","false")}
 	If ($ManagementLA) {$ns.Add("la_mgmt","true")} else {$ns.Add("la_mgmt","false")}
@@ -123,4 +140,5 @@ function Add-VPXInstance(){
 	Write-Host "VPX $Name is up and running" -foregroundcolor green
 }
 
+# Check if the Login Function has run by checking the hostname variable
 Function CheckLogin{If ($hostname -eq $NULL){Write-Host "Not logged in. Please login first" -foregroundcolor red;break}}
